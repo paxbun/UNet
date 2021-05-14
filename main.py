@@ -7,7 +7,7 @@ from pathlib import Path
 from os import path, listdir
 
 from unet.model import UNet
-from dataset import Provider, DatasetParam
+from dataset import Provider
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("checkpoint", None,
@@ -16,19 +16,13 @@ flags.DEFINE_string("dataset_path", f"{Path.home()}/musdb18", "Dataset Path")
 flags.DEFINE_string("stem", None, "Stem to separate", required=True)
 flags.DEFINE_integer("epochs", None, "Number of epochs to repeat")
 flags.DEFINE_integer(
-    "num_songs", 5, "Number of songs to get samples from for each epoch")
-flags.DEFINE_integer("num_samples", 100, "Number of samples ")
-flags.DEFINE_integer("max_decoded", 100,
-                     "The maximum number of decoded songs in the memory")
-flags.DEFINE_integer("repeat", 400, "Number of batches for each epoch")
-
-
-def get_dataset_param() -> DatasetParam:
-    return DatasetParam(
-        num_songs=FLAGS.num_songs,
-        num_samples=FLAGS.num_samples,
-        repeat=FLAGS.repeat
-    )
+    "num_songs", 20, "Number of songs to get samples from for each epoch")
+flags.DEFINE_integer(
+    "val_num_songs", 3, "Number of songs for validation from for each epoch")
+flags.DEFINE_integer(
+    "max_decoded", 20, "Number of decoded songs present in the memory")
+flags.DEFINE_integer(
+    "val_max_decoded", 10, "Number of decoded songs for validation present in the memory")
 
 
 def main(argv):
@@ -36,7 +30,7 @@ def main(argv):
     dataset = Provider(FLAGS.dataset_path, FLAGS.stem,
                        max_decoded=FLAGS.max_decoded)
     val_dataset = Provider(
-        FLAGS.dataset_path, FLAGS.stem, subsets="test", max_decoded=FLAGS.max_decoded)
+        FLAGS.dataset_path, FLAGS.stem, subsets="test", max_decoded=FLAGS.val_max_decoded)
     checkpoint_dir = FLAGS.checkpoint
 
     epoch = 0
@@ -51,8 +45,8 @@ def main(argv):
     epochs_to_inc = FLAGS.epochs
     while epochs_to_inc == None or epochs_to_inc > 0:
         print(f"Epoch: {epoch}")
-        train = dataset.make_dataset(get_dataset_param())
-        val = val_dataset.make_dataset(get_dataset_param())
+        train = dataset.make_dataset(FLAGS.num_songs, 20)
+        val = val_dataset.make_dataset(FLAGS.val_num_songs, 1)
         history = model.fit(train, validation_data=val)
         model.save_weights(f"{checkpoint_dir}/{epoch:05d}.ckpt")
         epoch += 1
