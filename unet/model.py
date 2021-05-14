@@ -16,7 +16,7 @@ class UNet(tf.keras.Model):
              loss: tf.keras.losses.Loss = tf.keras.losses.MeanAbsoluteError()):
         model = UNet()
         model.compile(optimizer=optimizer, loss=loss)
-        model.build(input_shape=(None, 512, 128, 1))
+        model.build(input_shape=(None, 512, 128, 2))
         return model
 
     def __init__(self):
