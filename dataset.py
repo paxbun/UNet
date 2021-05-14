@@ -23,7 +23,7 @@ class DatasetParam:
     __slots__ = "num_songs", "num_samples", "repeat"
 
     def __init__(self,
-                 num_songs: int = 100,
+                 num_songs: int = 5,
                  num_samples: int = 100,
                  repeat: int = 400):
 
@@ -47,19 +47,20 @@ class DecodedTrack:
     def from_track(track, stem: str):
         mixed_audio = tfio.audio.resample(
             track.audio.astype(np.float32), 44100, 8192)
-        mixed = (mixed_audio[:, 0], mixed_audio[:, 1])
+        mixed = tf.signal.stft(
+            [mixed_audio[:, 0], mixed_audio[:, 1]], 1024, 768)
+        mixed = tf.stack([tf.math.real(mixed), tf.math.imag(mixed)], axis=3)
 
         stem_audio = tfio.audio.resample(
             track.targets[stem].audio.astype(np.float32), 44100, 8192)
-        stem = (stem_audio[:, 0], stem_audio[:, 1])
+        stem = tf.signal.stft(
+            [stem_audio[:, 0], stem_audio[:, 1]], 1024, 768)
+        stem = tf.stack([tf.math.real(stem), tf.math.imag(stem)], axis=3)
 
-        length = mixed[0].shape[-1]
+        length = mixed[0].shape[1]
         return DecodedTrack(length, mixed, stem)
 
-    def __init__(self,
-                 length: int,
-                 mixed: Tuple[np.ndarray, np.ndarray],
-                 stem: Tuple[np.ndarray, np.ndarray]):
+    def __init__(self, length: int, mixed, stem):
         self.length = length
         self.mixed = mixed
         self.stem = stem
@@ -141,30 +142,22 @@ class Provider:
         indices = indices[:p.num_songs]
         self.decode(indices)
 
-        duration = 1024 + 768 * 127
-
         # Make `p.repeat` batches
         for _ in range(p.repeat):
-            x_batch = np.zeros((p.num_samples * 2, duration))
-            y_batch = np.zeros((p.num_samples * 2, duration))
+            x_batch = np.zeros((p.num_samples * 2, 128, 513, 2))
+            y_batch = np.zeros((p.num_samples * 2, 128, 513, 2))
 
             for i in range(p.num_samples):
                 track = self.decoded[random.choice(indices)]
-                begin = random.randint(0, track.length - duration)
-                end = begin + duration
+                begin = random.randint(0, track.length - 128)
+                end = begin + 128
                 left = i * 2
                 right = left + 1
 
-                x_batch[left] = track.mixed[0][begin:end]
-                x_batch[right] = track.mixed[1][begin:end]
-                y_batch[left] = track.stem[0][begin:end]
-                y_batch[right] = track.stem[1][begin:end]
-
-            x_batch = tf.signal.stft(x_batch, 1024, 768)
-            y_batch = tf.signal.stft(y_batch, 1024, 768)
-
-            x_batch = tf.concat([tf.real(x_batch), tf.imag(x_batch)], axis=-1)
-            y_batch = tf.concat([tf.real(y_batch), tf.imag(y_batch)], axis=-1)
+                x_batch[left] = track.mixed[0, begin:end]
+                x_batch[right] = track.mixed[1, begin:end]
+                y_batch[left] = track.stem[0, begin:end]
+                y_batch[right] = track.stem[1, begin:end]
 
             yield x_batch, y_batch
 
@@ -172,9 +165,9 @@ class Provider:
         output_types = (tf.float32, tf.float32)
         output_shapes = (
             tf.TensorShape(
-                (p.num_samples * 2, 512, 128, 2)),
+                (p.num_samples * 2, 128, 513, 2)),
             tf.TensorShape(
-                (p.num_samples * 2, 512, 128, 2)))
+                (p.num_samples * 2, 128, 513, 2)))
         return tf.data.Dataset.from_generator(lambda: self.generate(p),
                                               output_types=output_types,
                                               output_shapes=output_shapes)
