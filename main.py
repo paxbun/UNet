@@ -13,16 +13,16 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("checkpoint", None,
                     "Directory to save weights", required=True)
 flags.DEFINE_string("dataset_path", f"{Path.home()}/musdb18", "Dataset Path")
-flags.DEFINE_string("stem", None, "Stem to separate", required=True)
+flags.DEFINE_string("stem", "vocals", "Stem to separate")
 flags.DEFINE_integer("epochs", None, "Number of epochs to repeat")
 flags.DEFINE_integer(
     "num_songs", 20, "Number of songs to get samples from for each epoch")
 flags.DEFINE_integer(
     "val_num_songs", 3, "Number of songs for validation from for each epoch")
 flags.DEFINE_integer(
-    "max_decoded", 20, "Number of decoded songs present in the memory")
+    "max_decoded", 100, "Number of decoded songs present in the memory")
 flags.DEFINE_integer(
-    "val_max_decoded", 10, "Number of decoded songs for validation present in the memory")
+    "val_max_decoded", 100, "Number of decoded songs for validation present in the memory")
 
 
 def main(argv):
