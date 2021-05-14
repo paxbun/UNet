@@ -15,8 +15,8 @@ class UNet(tf.keras.Model):
     def make(optimizer: tf.keras.optimizers.Optimizer = "adam",
              loss: tf.keras.losses.Loss = tf.keras.losses.MeanAbsoluteError()):
 
-        input = tf.keras.Input(shape=(512, 128, 2), dtype=tf.float32)
-        encoder_output = input
+        input = tf.keras.Input(shape=(128, 513, 2), dtype=tf.float32)
+        encoder_output = tf.keras.layers.Cropping2D(((0, 0), (0, 1)))(input)
         encoder_outputs = []
         for i in range(5):
             encoder_output = Encoder(16 * (2 ** i))(encoder_output)
@@ -30,6 +30,8 @@ class UNet(tf.keras.Model):
             2, kernel_size=(5, 5), strides=(2, 2), activation="sigmoid")(decoder_output)
         decoder_output = tf.keras.layers.Cropping2D(
             ((2, 1), (2, 1)))(decoder_output)
+        decoder_output = tf.keras.layers.ZeroPadding2D(
+            padding=((0, 0), (0, 1)))(decoder_output)
         output = tf.keras.layers.Multiply()([input, decoder_output])
         model = tf.keras.Model(inputs=[input], outputs=[output])
         model.compile(optimizer=optimizer, loss=loss)
