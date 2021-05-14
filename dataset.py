@@ -41,15 +41,16 @@ class DecodedTrack:
         stems: Dictionary where the key is the name of the stem and the value is a tuple of numpy arrays from the stem
     """
 
-    __slots__ = "length", "mixed", "stems"
+    __slots__ = "length", "mixed", "stem"
 
     @staticmethod
     def from_track(track, stem: str):
-        mixed_audio = tfio.audio.resample(track.audio, 44100, 8192)
+        mixed_audio = tfio.audio.resample(
+            track.audio.astype(np.float32), 44100, 8192)
         mixed = (mixed_audio[:, 0], mixed_audio[:, 1])
 
         stem_audio = tfio.audio.resample(
-            track.targets[stem].audio, 44100, 8192)
+            track.targets[stem].audio.astype(np.float32), 44100, 8192)
         stem = (stem_audio[:, 0], stem_audio[:, 1])
 
         length = mixed[0].shape[-1]
