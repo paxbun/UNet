@@ -11,27 +11,6 @@ from tqdm import tqdm
 from typing import Union, List, Tuple, Optional
 
 
-class DatasetParam:
-    """Contains parameters for dataset generation.
-
-    Attributes:
-        num_songs: Total number of songs
-        num_samples: Total number of samples in one batch
-        repeat: Number of repeats
-    """
-
-    __slots__ = "num_songs", "num_samples", "repeat"
-
-    def __init__(self,
-                 num_songs: int = 5,
-                 num_samples: int = 100,
-                 repeat: int = 400):
-
-        self.num_songs = num_songs
-        self.num_samples = num_samples
-        self.repeat = repeat
-
-
 class DecodedTrack:
     """Contains decoded audio from the database.
 
@@ -48,20 +27,29 @@ class DecodedTrack:
         mixed_audio = tfio.audio.resample(
             track.audio.astype(np.float32), 44100, 8192)
         mixed = tf.signal.stft(
-            [mixed_audio[:, 0], mixed_audio[:, 1]], 1024, 768)
-        mixed = tf.stack([tf.math.real(mixed), tf.math.imag(mixed)], axis=3)
+            [mixed_audio[:, 0], mixed_audio[:, 1]], 1024, 768).numpy()
+        mixed = np.stack([mixed.real, mixed.imag], axis=3)
 
         stem_audio = tfio.audio.resample(
             track.targets[stem].audio.astype(np.float32), 44100, 8192)
         stem = tf.signal.stft(
-            [stem_audio[:, 0], stem_audio[:, 1]], 1024, 768)
-        stem = tf.stack([tf.math.real(stem), tf.math.imag(stem)], axis=3)
+            [stem_audio[:, 0], stem_audio[:, 1]], 1024, 768).numpy()
+        stem = np.stack([stem.real, stem.imag], axis=3)
 
-        length = mixed[0].shape[1]
-        return DecodedTrack(length, mixed, stem)
+        length = mixed.shape[1]
+        max_offset = length % 128
+        num_samples = length // 128
+        mixed_li = []
+        stem_li = []
 
-    def __init__(self, length: int, mixed, stem):
-        self.length = length
+        for offset in range(0, max_offset + 1, 8):
+            mixed_li.append(
+                np.reshape(mixed[:, offset:num_samples * 128 + offset], (2, num_samples, 128, 513, 2)))
+            stem_li.append(
+                np.reshape(stem[:, offset:num_samples * 128 + offset], (2, num_samples, 128, 513, 2)))
+        return DecodedTrack(mixed_li, stem_li)
+
+    def __init__(self, mixed: list, stem: list):
         self.mixed = mixed
         self.stem = stem
 
@@ -136,38 +124,24 @@ class Provider:
                 self.ord_decoded[idx] = self.next_ord
                 self.next_ord += 1
 
-    def generate(self, p: DatasetParam):
+    def generate(self, num_songs: int, repeat: int):
         indices = list(range(self.num_tracks))
         random.shuffle(indices)
-        indices = indices[:p.num_songs]
+        indices = indices[:num_songs]
         self.decode(indices)
 
-        # Make `p.repeat` batches
-        for _ in range(p.repeat):
-            x_batch = np.zeros((p.num_samples * 2, 128, 513, 2))
-            y_batch = np.zeros((p.num_samples * 2, 128, 513, 2))
+        for _ in range(repeat):
+            for index in indices:
+                track = self.decoded[index]
+                for m, s in zip(track.mixed, track.stem):
+                    yield m[0], s[0]
+                    yield m[1], s[1]
 
-            for i in range(p.num_samples):
-                track = self.decoded[random.choice(indices)]
-                begin = random.randint(0, track.length - 128)
-                end = begin + 128
-                left = i * 2
-                right = left + 1
-
-                x_batch[left] = track.mixed[0, begin:end]
-                x_batch[right] = track.mixed[1, begin:end]
-                y_batch[left] = track.stem[0, begin:end]
-                y_batch[right] = track.stem[1, begin:end]
-
-            yield x_batch, y_batch
-
-    def make_dataset(self, p: DatasetParam) -> tf.data.Dataset:
+    def make_dataset(self, num_songs: int, repeat: int) -> tf.data.Dataset:
         output_types = (tf.float32, tf.float32)
         output_shapes = (
-            tf.TensorShape(
-                (p.num_samples * 2, 128, 513, 2)),
-            tf.TensorShape(
-                (p.num_samples * 2, 128, 513, 2)))
-        return tf.data.Dataset.from_generator(lambda: self.generate(p),
+            tf.TensorShape((None, 128, 513, 2)),
+            tf.TensorShape((None, 128, 513, 2)))
+        return tf.data.Dataset.from_generator(lambda: self.generate(num_songs, repeat),
                                               output_types=output_types,
                                               output_shapes=output_shapes)
