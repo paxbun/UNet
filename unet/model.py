@@ -14,31 +14,24 @@ class UNet(tf.keras.Model):
     @staticmethod
     def make(optimizer: tf.keras.optimizers.Optimizer = "adam",
              loss: tf.keras.losses.Loss = tf.keras.losses.MeanAbsoluteError()):
-        model = UNet()
-        model.compile(optimizer=optimizer, loss=loss)
-        model.build(input_shape=(None, 512, 128, 2))
-        return model
 
-    def __init__(self):
-        self.encoders = []
-        self.decoders = []
-        for i in range(5):
-            self.encoders.append(Encoder(16 * (2 ** i)))
-            self.decoders.append(Decoder(16 * (2 ** i), i >= 2))
-        self.last_encoder = Encoder(512)
-        self.mask = tf.keras.layers.Multiply()
-
-    def call(self, inputs):
-        encoder_output = inputs
+        input = tf.keras.Input(shape=(512, 128, 2), dtype=tf.float32)
+        encoder_output = input
         encoder_outputs = []
         for i in range(5):
-            encoder_output = self.encoders[i](encoder_output)
+            encoder_output = Encoder(16 * (2 ** i))(encoder_output)
             encoder_outputs.append(encoder_output)
-        decoder_output = self.last_encoder(encoder_output)
+        decoder_output = Encoder(512)(encoder_output)
         for i in range(4, -1, -1):
-            decoder_output = self.decoders[i]([
-                encoder_output[i],
-                decoder_output
-            ])
-        output = self.mask([inputs, decoder_output])
-        return output
+            decoder_output = Decoder(16 * (2 ** i), i >= 2)(decoder_output)
+            decoder_output = tf.concat(
+                [decoder_output, encoder_outputs[i]], axis=-1)
+        decoder_output = tf.keras.layers.Conv2DTranspose(
+            2, kernel_size=(5, 5), strides=(2, 2), activation="sigmoid")(decoder_output)
+        decoder_output = tf.keras.layers.Cropping2D(
+            ((2, 1), (2, 1)))(decoder_output)
+        output = tf.keras.layers.Multiply()([input, decoder_output])
+        model = tf.keras.Model(inputs=[input], outputs=[output])
+        model.compile(optimizer=optimizer, loss=loss)
+
+        return model
