@@ -8,7 +8,7 @@ import musdb
 import random
 import gc
 from tqdm import tqdm
-from typing import Union, List, Tuple, Dict, Optional
+from typing import Union, List, Tuple, Optional
 
 
 class DatasetParam:
@@ -84,6 +84,9 @@ class Provider:
     def __init__(self, root: str, stem: str, subsets: Union[str, List[str]] = "train", max_decoded: int = 100):
         if max_decoded < 1:
             raise ValueError("max_decoded must be greater than 0")
+
+        if stem not in Provider.STEMS:
+            raise ValueError(f"'{stem}' is not a valid stem name")
 
         self.tracks = list(musdb.DB(root=root, subsets=subsets))
         self.stem = stem
