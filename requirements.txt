@@ -6,3 +6,4 @@ matplotlib==3.3.3
 musdb==0.4.0
 numpy==1.19.3
 youtube_dl==2021.3.25
+soundfile==0.10.3.post1
